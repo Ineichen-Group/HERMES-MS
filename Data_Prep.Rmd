@@ -1,0 +1,241 @@
+---
+title: "Data prep"
+output: html_document
+date: "2023-07-18"
+---
+
+```{r}
+library(dplyr)
+library(RColorBrewer)
+library(ggplot2)
+library(crayon)
+library(readxl)
+library(openxlsx) 
+library(forcats)
+library(readxl)
+```
+
+
+File loading
+```{r message=FALSE, warning=FALSE}
+HERMES_Extraction<- read_excel("MS_translation_extraction.xlsx", sheet=2, na="")%>%
+  mutate_all(~replace(., . == "NA", NA)) %>% 
+  mutate_all(~replace(., . == "NA", NA)) %>% 
+  slice(-1) %>% 
+  mutate(Included=as.numeric(Included))
+
+Drug_CV_Data <- read_excel("MS_translation_extraction.xlsx",sheet = "Drug_CV", na="")%>%
+  mutate_all(~replace(., . == "NA", NA))
+
+n_max=43 #why?
+druglist_total <- read_excel("Druglist_Multiple-sclerosis_Mastersheet.xlsx", sheet= "Included_SR", n_max=n_max)
+druglist <- data.frame(druglist_total$Name, druglist_total$Reason...15)
+```
+
+
+
+```{r}
+########## ***PART 1: Data cleanup*** (most of it prepared by Pia)
+
+#has to be done before INCLUDED dataframe is built
+HERMES_Extraction["296", "Strain"]<-"C57BL/6" #Z297- nur C57BL/6 wurde EAE induziert;
+HERMES_Extraction["281", "Strain"]<- "SWXJ" #clearly steated in graph of clinical scores and in methods part Z282
+HERMES_Extraction["291", "Strain"]<- "C57BL/6" #Z292 as stated in comment
+HERMES_Extraction["298", "Strain"]<- "Lewis" # Z299 as stated in comment
+HERMES_Extraction["298", "Species"]<- "rat" # Z299 as stated in comment
+HERMES_Extraction["313", "Strain"]<- "SJL/J" # Z314 only RREAE used- this model was only induced in SJL/J mice
+HERMES_Extraction["324", "Strain"]<- "2D2xTh" # Z325 s. onenote- werden noch gekreuzt
+HERMES_Extraction["331", "Strain"]<- "C57BL/6"# Z332 as stated in comment
+HERMES_Extraction["351", "Strain"]<- "C57BL/6"# Z352 as stated in comment 
+HERMES_Extraction["351", "Species"]<- "mouse" # Z352 as stated in comment 
+#Z396 no clinical score extracted- keep strain combination-> splitten ...
+#Z397 no clinical score extracted- keep combination? mouse, xenopus
+#Z416 no clinical score extracted- keep combination? mouse, rat
+HERMES_Extraction["414", "Species"]<- "rat" # Z415 as stated in comment
+HERMES_Extraction["414", "Strain"]<- "Sprague-Dawley" # s. oben
+HERMES_Extraction["442", "Strain"]<- "SJL/J" #Z443 as stated in comment
+HERMES_Extraction["450", "Strain"]<- "C57BL/6"# Z451 as stated in comment
+HERMES_Extraction["461", "Strain"]<- "B10.PL" #Z462 as stated in comment
+HERMES_Extraction["465", "Strain"]<- "Lewis"# Z466 as stated in comment 
+HERMES_Extraction["465", "Species"]<- "rat" # Z466 as stated in comment
+HERMES_Extraction["470", "Strain"]<- "Dark Agouti"# Z471 as stated in comment 
+#Z589 no clinical score extracted- keep strain combination?
+
+#generates dataframe with only included papers
+HERMES_INCLUDED<-HERMES_Extraction %>% filter(Included==1)
+HERMES_EXCLUDED<-HERMES_Extraction %>% filter(Included==0)
+```
+
+
+
+```{r}
+#count how many times something occurs -useNA stellt auch NAs dar
+
+#BEREINIGEN VON SCHREIBFEHLERN
+
+#table(HERMES_EXCLUDED$`Reason for exclusion`, useNA="ifany")
+HERMES_EXCLUDED$`Reason for exclusion`<-gsub("dulicate","duplicate", HERMES_EXCLUDED$`Reason for exclusion`)
+HERMES_EXCLUDED$`Reason for exclusion`<-gsub("Other","other", HERMES_EXCLUDED$`Reason for exclusion`)
+
+HERMES_INCLUDED$`Animal model`[HERMES_INCLUDED$`Animal model`=="TMEV"]<-"TMEV-IDD"
+#HERMES_INCLUDED$`Animal model`[HERMES_INCLUDED$`Animal model`=="TMEV-IDD-IDD"]<-"TMEV-IDD"
+HERMES_INCLUDED$`Animal model`[HERMES_INCLUDED$`Animal model`=="AT-EAE"]<-"passive EAE"
+HERMES_INCLUDED$`Animal model`[HERMES_INCLUDED$`Animal model`=="passive EAE"]<-"EAE" 
+
+#table(HERMES_INCLUDED$Species, useNA="ifany") 
+HERMES_INCLUDED$Species<-gsub("mosue", "mouse", HERMES_INCLUDED$Species)
+HERMES_INCLUDED$Species<-gsub("rat, mouse", "mouse, rat", HERMES_INCLUDED$Species)
+
+```
+
+
+
+```{r}
+corrections <- data.frame(
+  incorrect = c("C57Bl/6", "C57BL/6J", "C57BL6", "C57/BL6", "C57BL/6/J", "C57Bl76", "C57BL76",
+                "C57BL6/J", "C57BL/5", "C57B16", "C57BL/6N", "B6", "albino (line H)", "B10.PL/Sn", "B10.PL(73NS)/Sn",
+                "B10.PL-H2uH2-T18a/(73NS)/SnJ (B10.PL)", "(PLxSJL )F1", "PL-SJLF1/J", "SJL x BALB/c",
+                "SJLxBALB/c", "SJL/J", "SJL/L", "SJL (H-2s)", "SJL / ola", "Swiss Jim Lambert",
+                "BN", "Sprague- Dawley", "Sprague–Dawley", "SJL, C57BL/6", "2D2xTh", "Th", 
+                "TCRMOG (2D2), IgHMOG (TH)", "C57BL/6, 2D2", "C57BL/6.Cg-Tg (IgHMOGy1-YFP) 16Jrs/J (IgHMOGy1-YFP)", "Biozzi ABH (H2dq1)", "DA/OlaHsd"),
+  correct = c("C57BL/6", "C57BL/6", "C57BL/6", "C57BL/6", "C57BL/6", "C57BL/6", "C57BL/6",
+              "C57BL/6", "C57BL/6", "C57BL/6", "C57BL/6", "C57BL/6", "C57BL/6", "B10.PL", "B10.PL",
+              "B10.PL", "(PLxSJL)F1", "(PLxSJL)F1", "(SJLxBALB/c)F1", "(SJLxBALB/c)F1", "SJL",
+              "SJL", "SJL", "SJL", "SJL", "Brown Norway", "Sprague-Dawley", "Sprague-Dawley",
+              "C57BL/6, SJL", "TCRMOGxIgHMOG", "IgHMOG", "TCRMOG, IghMOG", "C57BL/6, TCRMOG",  "C57BL/B6.Cg-IgHMOGy1-YFP", "Biozzi ABH" , "Dark Agouti")
+)
+
+# Apply the corrections to the 'Strain' column in the dataframe
+replace_terms <- function(text, replacements) {
+  for (i in 1:nrow(replacements)) {
+    text <- gsub(replacements[i, "incorrect"], replacements[i, "correct"], text, fixed = TRUE)
+  }
+  return(text)
+}
+```
+
+
+
+```{r}
+HERMES_INCLUDED$Strain <- replace_terms(HERMES_INCLUDED$Strain, corrections)
+
+HERMES_INCLUDED$Strain[HERMES_INCLUDED$Strain=="SJL x BALB/c"]<-"(SJLxBALB/c)F1"
+HERMES_INCLUDED$Strain[HERMES_INCLUDED$Strain=="SJLxBALB/c"]<-"(SJLxBALB/c)F1"
+
+HERMES_INCLUDED$Sex<-gsub("both sexes", "both", HERMES_INCLUDED$Sex)
+
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="Interferon Beta1"]<-"Interferon Beta 1"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="Minocyclin"]<-"Minocycline"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="17beta-estradiol"]<-"Estradiol"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="FIngolimmod"]<-"Fingolimod"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="Fingolimmod"]<-"Fingolimod"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="1,25-dihydroxyvitamin D3"]<-"Calcitriol"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="Calcitriol"]<-"Vitamin D3"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="Estradiol"]<-"Estriol"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="anti-CD20 monoclonal antibody"]<-"anti-CD20" 
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="anti-CD20 antibody 18B12"]<-"anti-CD20"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="anti-CD20"]<-"Rituximab"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="CTLA-4-Fc"]<-"CTLA4-Ig"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="CTLA4-Ig"]<-"Abatacept"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="Anti-mouse CD52 monoclonal antibody"]<-"anti-CD52"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="murine anti-CD52 antibody"]<-"anti-CD52"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="anti-CD52"]<-"Alemtuzumab"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="CTLA4-Ig"]<-"Abatacept"
+HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="anti-VLA-4 antibody"]<-"Natalizumab"
+
+HERMES_INCLUDED$`Tested drug 2`[HERMES_INCLUDED$`Tested drug 2`=="estriol"]<-"Estriol"
+HERMES_INCLUDED$`Tested drug 2`[HERMES_INCLUDED$`Tested drug 2`=="Calcitriol"]<-"Vitamin D3"
+
+HERMES_INCLUDED$`Data type...27`[HERMES_INCLUDED$`Data type...27`=="mean, EM"]<-"mean,SEM"
+HERMES_INCLUDED$`Data type...27`[HERMES_INCLUDED$`Data type...27`=="mean, SE"] <- "mean, SEM"
+HERMES_INCLUDED$`Data type...27`[HERMES_INCLUDED$`Data type...27`=="mean,SEM"] <- "mean, SEM"
+HERMES_INCLUDED$`Data type...27`[HERMES_INCLUDED$`Data type...27`=="mean, NA"] <- "mean"
+HERMES_INCLUDED$`Data type...34`[HERMES_INCLUDED$`Data type...34`=="mean, SE"] <- "mean, SEM"
+HERMES_INCLUDED$`Data type 2`[HERMES_INCLUDED$`Data type 2`=="mean, NA"] <- "mean"
+
+HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="apparent diffusion coefficient values parallel to the long axis"]<-"ADC"
+HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="gadolinium enhancement measure"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="Gadolinium Score"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="Lesion volume total"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="T2 lesion load"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="T1 lesion in mm^3"]<-"T1"
+HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="MRI Volume"]<-"brain volume" #richtig so???
+HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="ventricle size"]<-"brain volume" #richtig so???
+
+HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="apparent diffusion coefficient values perpendicular to the optic nerve long axis"]<-"ADC"
+HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="Gd-DOTA Medulla"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="normalized T2 signal intensity Corpus callosum"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="T2 cerebral edema"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="T2-WSI"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="MRI load"]<-""#zu was poolen???
+
+HERMES_INCLUDED$`MRI Outcome...101`[HERMES_INCLUDED$`MRI Outcome...101`=="gadolinium enhancement measure"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...101`[HERMES_INCLUDED$`MRI Outcome...101`=="Gd-DOTA Inf. Colliculus"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...101`[HERMES_INCLUDED$`MRI Outcome...101`=="PIxel Intensity"]<-"" #wohin soll man das poolen???
+HERMES_INCLUDED$`MRI Outcome...101`[HERMES_INCLUDED$`MRI Outcome...101`=="normalized T2 signal intensity Hippocampus"]<-"T2"
+
+HERMES_INCLUDED$`MRI Outcome...109`[HERMES_INCLUDED$`MRI Outcome...109`=="normalized T2 signal intensity Cortex"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...109`[HERMES_INCLUDED$`MRI Outcome...109`=="Gd-Dota Striatum"]<-"gadolinium"
+```
+
+
+
+```{r}
+###addition of drug status column (marketed vs failed)
+HERMES_drugs <- data.frame(status = character(nrow(HERMES_INCLUDED)))  # Create a new data frame with 'status' column
+
+for (y in 1:nrow(HERMES_INCLUDED)) {
+  found_match <- FALSE
+  
+  for (j in 1:n_max) {
+    if (!is.na(HERMES_INCLUDED[y, "Tested drug(s)"]) && HERMES_INCLUDED[y, "Tested drug(s)"] == druglist[j, "druglist_total.Name"]) {
+      found_match <- TRUE
+      
+      if (druglist[j, "druglist_total.Reason...15"] == "Marketed") {
+        HERMES_drugs$status[y] <- "Marketed"
+      } else {
+        HERMES_drugs$status[y] <- "Failed"
+      }
+      
+      break  # Exit the inner loop once a match is found
+    }
+  }
+  
+  if (!found_match) {
+    HERMES_drugs$status[y] <- "NA"
+  }
+}
+
+HERMES_INCLUDED$status <- HERMES_drugs$status  # Add 'status' column from HERMES_drugs to HERMES_INCLUDED
+
+###drug status of second drug tested in publication:
+HERMES_drugs2 <- data.frame(status2 = character(474))  # Create a new data frame with 'status2' column
+
+for (y in 1:nrow(HERMES_INCLUDED)) {
+  found_match <- FALSE
+  
+  for (j in 1:n_max) {
+    if (!is.na(HERMES_INCLUDED[y, "Tested drug 2"]) && HERMES_INCLUDED[y, "Tested drug 2"] == druglist[j, "druglist_total.Name"]) {
+      found_match <- TRUE
+      
+      if (druglist[j, "druglist_total.Reason...15"] == "Marketed") {
+        HERMES_drugs2$status2[y] <- "Marketed"
+      } else {
+        HERMES_drugs2$status2[y] <- "Failed"
+      }
+      
+      break  # Exit the inner loop once a match is found
+    }
+  }
+  
+  if (!found_match) {
+    HERMES_drugs2$status2[y] <- "NA"
+  }
+}
+
+HERMES_INCLUDED$status2 <- HERMES_drugs2$status2  # Add 'status2' column from HERMES_drugs2 to HERMES_INCLUDED
+
+#write.csv(HERMES_INCLUDED,"HERMES_INCLUDED.csv")
+read.csv("HERMES_INCLUDED.csv")
+```
+
