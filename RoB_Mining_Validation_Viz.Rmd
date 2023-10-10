@@ -7,12 +7,13 @@ date: "2023-07-25"
 ```{r}
 library(tidyr)
 library(dplyr)
+library(ggplot2)
 library(robvis)
 library(readxl)
 ```
 
 ```{r}
-MS_translation_extraction <- read_excel("MS_translation_extraction.xlsx", 
+MS_translation_extraction_rob <- read_excel("MS_translation_extraction.xlsx", 
                                         sheet = "Interrater agreement+ Risk of B", 
                                         range = "b1:bh66") %>% 
   filter(!is.na(Author))
@@ -22,7 +23,7 @@ mined_rob <- read_excel("mined_rob.xlsx")
 
 ```{r}
 RoB_manual_clean<-
-  MS_translation_extraction%>%
+  MS_translation_extraction_rob%>%
   filter(!is.na(DOI)) %>% 
   mutate(DOI=gsub("[[:punct:]\\s]", "", DOI)) %>% 
   mutate(DOI=gsub(" ", "", DOI)) %>% 
@@ -89,18 +90,12 @@ df<-data.frame(cbind(
 
 }
 
-merge(RoB_manual_clean %>% select(DOI,paste0("Conflict","_manual")) %>% rename(manual=2),
-RoB_mined_clean %>% select(DOI,paste0("Conflict","_mined"))%>% rename(mined=2),by="DOI") %>% 
-  mutate(result=case_when(
-    manual==1&mined==1~"TP",
-    manual==1&mined==0~"FN",
-    manual==0&mined==1~"FP",
-    manual==0&mined==0~"TN",
-  )) %>% View()
+df_confmat %>% View()
+
 ```
 
 ```{r}
-RoB_mined_clean %>% 
+rob_figure<-RoB_mined_clean %>% 
   mutate(across(ends_with("_mined"),~ gsub("1","Low", .)))%>% 
   mutate(across(ends_with("_mined"),~ gsub("0","High", .))) %>% 
   rename(`ARRIVE guidelines`= ARRIVE_mined,
@@ -112,6 +107,7 @@ RoB_mined_clean %>%
   pivot_longer(!DOI,names_to="item",values_to = "value") %>% 
   group_by(item,value) %>% 
   count() %>% 
+  filter(!(item=="Conflict of interest")) %>% 
   ggplot() +
         geom_bar(stat="identity",
           aes(x=n,y = item,fill = value
@@ -119,14 +115,15 @@ RoB_mined_clean %>%
         )+
   guides(fill = guide_legend(reverse = TRUE)) +
   scale_fill_manual("Risk of Bias",
-          values = c(High = "#bf0000", Low = "#02c100"),
+          values = c(High = "#ff574e", Low = "#7bcd5b"),
           labels = c(High = "  High risk of bias  ",Low = "  Low risk of bias   "))+
   scale_x_continuous(labels = scales::percent)+
   theme(
           axis.title.x = ggplot2::element_blank(),
           axis.title.y = ggplot2::element_blank(),
           axis.ticks.y = ggplot2::element_blank(),
-          axis.text.y = ggplot2::element_text(size = 10,
+          axis.text.x=element_text(size=12),
+          axis.text.y = ggplot2::element_text(size = 12,
                                               color = "black"),
           axis.line.x = ggplot2::element_line(
             colour = "black",
@@ -141,10 +138,13 @@ RoB_mined_clean %>%
                                                     colour = "black"),
           legend.title = ggplot2::element_blank(),
           legend.key.size = ggplot2::unit(0.75, "cm"),
-          legend.text = ggplot2::element_text(size = 8)
+          legend.text = ggplot2::element_text(size = 10)
         )
 ```
 
+```{r}
+ggsave("rob_plot_v2.png",rob_figure,width=7,height=4)
+```
 
 
 

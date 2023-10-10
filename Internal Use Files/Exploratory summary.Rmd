@@ -1,0 +1,202 @@
+---
+title: "Exploratory_Summary"
+output: html_document
+date: "2023-08-15"
+---
+
+```{r setup, include=FALSE}
+library(DiagrammeR)
+library(RColorBrewer)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(gridExtra)
+library(forcats)
+library(readxl)
+library(ggpubr)
+library(ggplot2)
+library(purrr)
+library(ggbeeswarm)
+library(cowplot)
+library(stringr)
+library(kableExtra)
+library(ggh4x)
+library(metafor)
+library(ggpubr)
+
+load(file = "hermes_data.RData")
+```
+
+
+n Unique studies in the data
+```{r message=FALSE, warning=FALSE}
+length(unique(HERMES_INCLUDED$Title))
+```
+
+n outcomes extracted (n rows of the dataset), even with duplicate rows removed
+```{r message=FALSE, warning=FALSE}
+nrow(unique(HERMES_INCLUDED %>% select(!(X))))
+```
+
+Duplicate studies (selected duplicates by Title) - basically this dataset is a pivoted table of the studies using multiple drugs
+```{r message=FALSE, warning=FALSE}
+HERMES_INCLUDED[HERMES_INCLUDED$Title %in% HERMES_INCLUDED$Title[duplicated(HERMES_INCLUDED$Title)],] %>% 
+  select(Species,Title) %>% 
+  arrange(Title) %>% View()
+```
+
+
+Median of first human trial year
+```{r message=FALSE, warning=FALSE}
+median(Drug_CV_Data$`First in human trial`)
+```
+
+Median overall of first studies included (animal)
+```{r message=FALSE, warning=FALSE}
+summary_df_year<-rbind(HERMES_INCLUDED %>% select(Tested.drug.s.,Year,status) %>% rename(drug_name=1,status=3),
+      HERMES_INCLUDED %>% select(Tested.drug.2,Year,status2) %>% rename(drug_name=1,status=3),
+      HERMES_INCLUDED %>% select(Tested.drug.3,Year,status) %>% rename(drug_name=1,status=3)) %>% 
+  group_by(drug_name,status) %>% 
+  summarise(min_Year=min(Year)) %>% 
+  drop_na() %>% 
+  ungroup()
+
+
+median(summary_df_year$min_Year) #overall median first year
+```
+
+
+Median of first studies included (animal) by status of drug
+```{r message=FALSE, warning=FALSE}
+summary_df_year %>% 
+  group_by(status) %>% 
+  summarise(median=median(min_Year)) #median first year per status
+```
+
+Data frame creation
+```{r message=FALSE, warning=FALSE}
+FDA_df_summary<-merge(rbind(HERMES_INCLUDED %>% select(Tested.drug.s.,Year,status) %>% rename(Drug=1,status=3),
+      HERMES_INCLUDED %>% select(Tested.drug.2,Year,status2) %>% rename(Drug=1,status=3),
+      HERMES_INCLUDED %>% select(Tested.drug.3,Year,status) %>% rename(Drug=1,status=3)) %>% 
+  drop_na() ,
+Drug_CV_Data %>% select(Drug,`First in human trial`,FDA_approval),by="Drug") %>% 
+  mutate(animal_after_first_human=ifelse(Year>`First in human trial`,"yes","no"),
+         animal_after_FDA=ifelse(Year>FDA_approval,"yes","no"))
+```
+
+% of animal studies - included in the SR - conducted after first human trial
+```{r message=FALSE, warning=FALSE}
+FDA_df_summary %>% 
+  group_by(animal_after_first_human) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(freq = round(n / sum(n),3))
+```
+
+% of animal studies - included in the SR - conducted after FDA approval
+```{r message=FALSE, warning=FALSE}
+FDA_df_summary %>% 
+  drop_na(FDA_approval) %>% 
+  group_by(animal_after_FDA) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(freq = round(n / sum(n),3)) 
+```
+
+n in vivo studies included
+```{r message=FALSE, warning=FALSE}
+nrow(HERMES_INCLUDED)
+```
+
+```{r message=FALSE, warning=FALSE}
+drug_info_df %>% arrange(drug_status,Name) %>% 
+  group_by(drug_status) %>% count()
+```
+
+Rough estimate of animals used
+```{r message=FALSE, warning=FALSE}
+mean(HERMES_INCLUDED$Total.number.of.animals,na.rm=T)*nrow(HERMES_INCLUDED)
+```
+
+Median and range of EAE effect size
+```{r message=FALSE, warning=FALSE}
+ES_df_trial %>% 
+  filter(item=="EAE") %>% 
+  group_by(drug_status) %>% 
+  summarise(median=median(yi,na.rm=T),min=min(yi,na.rm=T),max=max(yi,na.rm=T))
+```
+
+Wilcoxon test of effect sizes of failed vs marketed drugs in EAE
+```{r message=FALSE, warning=FALSE}
+wilcox.test(ES_df_trial$yi[ES_df_trial$item=="EAE"&ES_df_trial$drug_status=="2Failed"], 
+            ES_df_trial$yi[ES_df_trial$item=="EAE"&ES_df_trial$drug_status=="1Marketed"])
+```
+
+## 22 August
+
+1) Figure 2 A - D: could tell me the exact number of studies represented by the corresponding bars?
+```{r message=FALSE, warning=FALSE}
+rbind(df_row1,df_row2) %>% 
+  group_by(item) %>% 
+  mutate(percentage=n/sum(n)) %>% 
+  kbl() %>%
+  kable_styling()
+```
+
+2) Figure 4: could you tell me the number of studies that reported EAE scores and the number of studies that reported MRI scores? - both with ES and not 
+
+```{r message=FALSE, warning=FALSE}
+ES_df_trial2 %>% 
+  filter(!(is.na(drug_mean))) %>% 
+  group_by(item) %>% 
+  count()
+```
+
+
+3) Figure 4, standardized mean differences for MRI
+```{r message=FALSE, warning=FALSE}
+ES_df_trial %>% 
+  filter(item=="MRI") %>% 
+  group_by(drug_status) %>% 
+  summarise(median=median(yi,na.rm=T),min=min(yi,na.rm=T),max=max(yi,na.rm=T))
+```
+
+Wilcoxon test of effect sizes of failed vs marketed drugs in EAE
+```{r message=FALSE, warning=FALSE}
+wilcox.test(ES_df_trial$yi[ES_df_trial$item=="MRI"&ES_df_trial$drug_status=="2Failed"], 
+            ES_df_trial$yi[ES_df_trial$item=="MRI"&ES_df_trial$drug_status=="1Marketed"])
+```
+
+4) mean number of total animals used reported and median+range
+```{r message=FALSE, warning=FALSE}
+mean(HERMES_INCLUDED$Total.number.of.animals,na.rm=T)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+paste0("median: ",median(HERMES_INCLUDED$Total.number.of.animals,na.rm=T),". min: ",
+min(HERMES_INCLUDED$Total.number.of.animals,na.rm=T),". max:",
+max(HERMES_INCLUDED$Total.number.of.animals,na.rm=T))
+```
+
+
+## 10 October
+
+We discussed to not only mention the number of studies that provide EAE scores, but also the amount of studies that actually provided all the information we needed to calculate the effect size from those EAE scores. could you send me this number too? (so basically how many studies that we were able to use for our EAE effect size figure)
+```{r message=FALSE, warning=FALSE}
+ES_df_trial2 %>% 
+  filter(item=="EAE") %>% nrow()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

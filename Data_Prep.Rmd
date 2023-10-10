@@ -12,6 +12,7 @@ library(crayon)
 library(readxl)
 library(openxlsx) 
 library(forcats)
+library(tidyr)
 library(readxl)
 ```
 
@@ -27,8 +28,7 @@ HERMES_Extraction<- read_excel("MS_translation_extraction.xlsx", sheet=2, na="")
 Drug_CV_Data <- read_excel("MS_translation_extraction.xlsx",sheet = "Drug_CV", na="")%>%
   mutate_all(~replace(., . == "NA", NA))
 
-n_max=43 #why?
-druglist_total <- read_excel("Druglist_Multiple-sclerosis_Mastersheet.xlsx", sheet= "Included_SR", n_max=n_max)
+druglist_total <- read_excel("Druglist_Multiple-sclerosis_Mastersheet.xlsx", sheet= "Included_SR")
 druglist <- data.frame(druglist_total$Name, druglist_total$Reason...15)
 ```
 
@@ -64,11 +64,7 @@ HERMES_Extraction["470", "Strain"]<- "Dark Agouti"# Z471 as stated in comment
 #generates dataframe with only included papers
 HERMES_INCLUDED<-HERMES_Extraction %>% filter(Included==1)
 HERMES_EXCLUDED<-HERMES_Extraction %>% filter(Included==0)
-```
 
-
-
-```{r}
 #count how many times something occurs -useNA stellt auch NAs dar
 
 #BEREINIGEN VON SCHREIBFEHLERN
@@ -146,38 +142,37 @@ HERMES_INCLUDED$`Tested drug(s)`[HERMES_INCLUDED$`Tested drug(s)`=="anti-VLA-4 a
 HERMES_INCLUDED$`Tested drug 2`[HERMES_INCLUDED$`Tested drug 2`=="estriol"]<-"Estriol"
 HERMES_INCLUDED$`Tested drug 2`[HERMES_INCLUDED$`Tested drug 2`=="Calcitriol"]<-"Vitamin D3"
 
-HERMES_INCLUDED$`Data type...27`[HERMES_INCLUDED$`Data type...27`=="mean, EM"]<-"mean,SEM"
-HERMES_INCLUDED$`Data type...27`[HERMES_INCLUDED$`Data type...27`=="mean, SE"] <- "mean, SEM"
-HERMES_INCLUDED$`Data type...27`[HERMES_INCLUDED$`Data type...27`=="mean,SEM"] <- "mean, SEM"
-HERMES_INCLUDED$`Data type...27`[HERMES_INCLUDED$`Data type...27`=="mean, NA"] <- "mean"
-HERMES_INCLUDED$`Data type...34`[HERMES_INCLUDED$`Data type...34`=="mean, SE"] <- "mean, SEM"
+HERMES_INCLUDED$`Data type...28`[HERMES_INCLUDED$`Data type...28`=="mean, EM"]<-"mean,SEM"
+HERMES_INCLUDED$`Data type...28`[HERMES_INCLUDED$`Data type...28`=="mean, SE"] <- "mean, SEM"
+HERMES_INCLUDED$`Data type...28`[HERMES_INCLUDED$`Data type...28`=="mean,SEM"] <- "mean, SEM"
+HERMES_INCLUDED$`Data type...28`[HERMES_INCLUDED$`Data type...28`=="mean, NA"] <- "mean"
+HERMES_INCLUDED$`Data type...35`[HERMES_INCLUDED$`Data type...35`=="mean, SE"] <- "mean, SEM"
 HERMES_INCLUDED$`Data type 2`[HERMES_INCLUDED$`Data type 2`=="mean, NA"] <- "mean"
 
-HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="apparent diffusion coefficient values parallel to the long axis"]<-"ADC"
-HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="gadolinium enhancement measure"]<-"gadolinium"
-HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="Gadolinium Score"]<-"gadolinium"
-HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="Lesion volume total"]<-"T2"
-HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="T2 lesion load"]<-"T2"
-HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="T1 lesion in mm^3"]<-"T1"
-HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="MRI Volume"]<-"brain volume" #richtig so???
-HERMES_INCLUDED$`MRI Outcome...35`[HERMES_INCLUDED$`MRI Outcome...35`=="ventricle size"]<-"brain volume" #richtig so???
+HERMES_INCLUDED$`MRI Outcome...36`[HERMES_INCLUDED$`MRI Outcome...36`=="apparent diffusion coefficient values parallel to the long axis"]<-"ADC"
+HERMES_INCLUDED$`MRI Outcome...36`[HERMES_INCLUDED$`MRI Outcome...36`=="gadolinium enhancement measure"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...36`[HERMES_INCLUDED$`MRI Outcome...36`=="Gadolinium Score"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...36`[HERMES_INCLUDED$`MRI Outcome...36`=="Lesion volume total"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...36`[HERMES_INCLUDED$`MRI Outcome...36`=="T2 lesion load"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...36`[HERMES_INCLUDED$`MRI Outcome...36`=="T1 lesion in mm^3"]<-"T1"
+HERMES_INCLUDED$`MRI Outcome...36`[HERMES_INCLUDED$`MRI Outcome...36`=="MRI Volume"]<-"brain volume" #richtig so???
+HERMES_INCLUDED$`MRI Outcome...36`[HERMES_INCLUDED$`MRI Outcome...36`=="ventricle size"]<-"brain volume" #richtig so???
 
-HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="apparent diffusion coefficient values perpendicular to the optic nerve long axis"]<-"ADC"
-HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="Gd-DOTA Medulla"]<-"gadolinium"
-HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="normalized T2 signal intensity Corpus callosum"]<-"T2"
-HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="T2 cerebral edema"]<-"T2"
-HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="T2-WSI"]<-"T2"
-HERMES_INCLUDED$`MRI Outcome...92`[HERMES_INCLUDED$`MRI Outcome...92`=="MRI load"]<-""#zu was poolen???
+HERMES_INCLUDED$`MRI Outcome...93`[HERMES_INCLUDED$`MRI Outcome...93`=="apparent diffusion coefficient values perpendicular to the optic nerve long axis"]<-"ADC"
+HERMES_INCLUDED$`MRI Outcome...93`[HERMES_INCLUDED$`MRI Outcome...93`=="Gd-DOTA Medulla"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...93`[HERMES_INCLUDED$`MRI Outcome...93`=="normalized T2 signal intensity Corpus callosum"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...93`[HERMES_INCLUDED$`MRI Outcome...93`=="T2 cerebral edema"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...93`[HERMES_INCLUDED$`MRI Outcome...93`=="T2-WSI"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...93`[HERMES_INCLUDED$`MRI Outcome...93`=="MRI load"]<-""#zu was poolen???
 
-HERMES_INCLUDED$`MRI Outcome...101`[HERMES_INCLUDED$`MRI Outcome...101`=="gadolinium enhancement measure"]<-"gadolinium"
-HERMES_INCLUDED$`MRI Outcome...101`[HERMES_INCLUDED$`MRI Outcome...101`=="Gd-DOTA Inf. Colliculus"]<-"gadolinium"
-HERMES_INCLUDED$`MRI Outcome...101`[HERMES_INCLUDED$`MRI Outcome...101`=="PIxel Intensity"]<-"" #wohin soll man das poolen???
-HERMES_INCLUDED$`MRI Outcome...101`[HERMES_INCLUDED$`MRI Outcome...101`=="normalized T2 signal intensity Hippocampus"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...102`[HERMES_INCLUDED$`MRI Outcome...102`=="gadolinium enhancement measure"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...102`[HERMES_INCLUDED$`MRI Outcome...102`=="Gd-DOTA Inf. Colliculus"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...102`[HERMES_INCLUDED$`MRI Outcome...102`=="PIxel Intensity"]<-"" #wohin soll man das poolen???
+HERMES_INCLUDED$`MRI Outcome...102`[HERMES_INCLUDED$`MRI Outcome...102`=="normalized T2 signal intensity Hippocampus"]<-"T2"
 
-HERMES_INCLUDED$`MRI Outcome...109`[HERMES_INCLUDED$`MRI Outcome...109`=="normalized T2 signal intensity Cortex"]<-"T2"
-HERMES_INCLUDED$`MRI Outcome...109`[HERMES_INCLUDED$`MRI Outcome...109`=="Gd-Dota Striatum"]<-"gadolinium"
+HERMES_INCLUDED$`MRI Outcome...110`[HERMES_INCLUDED$`MRI Outcome...110`=="normalized T2 signal intensity Cortex"]<-"T2"
+HERMES_INCLUDED$`MRI Outcome...110`[HERMES_INCLUDED$`MRI Outcome...110`=="Gd-Dota Striatum"]<-"gadolinium"
 ```
-
 
 
 ```{r}
@@ -208,34 +203,11 @@ for (y in 1:nrow(HERMES_INCLUDED)) {
 
 HERMES_INCLUDED$status <- HERMES_drugs$status  # Add 'status' column from HERMES_drugs to HERMES_INCLUDED
 
-###drug status of second drug tested in publication:
-HERMES_drugs2 <- data.frame(status2 = character(474))  # Create a new data frame with 'status2' column
+HERMES_INCLUDED<-HERMES_INCLUDED %>% 
+  left_join(.,druglist %>% rename(`Tested drug 2`=1,status2=2) %>% drop_na(),by="Tested drug 2")# Add 'status2' column from 
 
-for (y in 1:nrow(HERMES_INCLUDED)) {
-  found_match <- FALSE
-  
-  for (j in 1:n_max) {
-    if (!is.na(HERMES_INCLUDED[y, "Tested drug 2"]) && HERMES_INCLUDED[y, "Tested drug 2"] == druglist[j, "druglist_total.Name"]) {
-      found_match <- TRUE
-      
-      if (druglist[j, "druglist_total.Reason...15"] == "Marketed") {
-        HERMES_drugs2$status2[y] <- "Marketed"
-      } else {
-        HERMES_drugs2$status2[y] <- "Failed"
-      }
-      
-      break  # Exit the inner loop once a match is found
-    }
-  }
-  
-  if (!found_match) {
-    HERMES_drugs2$status2[y] <- "NA"
-  }
-}
+write.csv(HERMES_INCLUDED,"HERMES_INCLUDED.csv")
+# read.csv("HERMES_INCLUDED.csv")
 
-HERMES_INCLUDED$status2 <- HERMES_drugs2$status2  # Add 'status2' column from HERMES_drugs2 to HERMES_INCLUDED
-
-#write.csv(HERMES_INCLUDED,"HERMES_INCLUDED.csv")
-read.csv("HERMES_INCLUDED.csv")
 ```
 
