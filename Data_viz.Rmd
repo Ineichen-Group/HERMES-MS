@@ -121,6 +121,7 @@ labeller_row1 <- function(variable,value){
 
 plot_row1<-
 df_row1%>% 
+  mutate(Category=gsub("TMEV-IDD","TMEV",Category)) %>% 
   ggplot(aes(x = reorder(Category, -n), y = n)) +
   geom_bar(stat = "identity", fill = "#b6b6b6",color="#929292") +
   labs(x = "Animal Model", y = "Number of studies") +
@@ -164,6 +165,7 @@ labeller_row2 <- function(variable,value){
   return(labels_row2[value])}
 
 plot_row2<-df_row2%>% 
+  mutate(Category=gsub("TMEV-IDD","TMEV",Category)) %>% 
   ggplot(aes(x = reorder(Category, -n), y = n)) +
   geom_bar(stat = "identity", fill = "#b6b6b6",color="#929292") +
   labs(x = "Animal Model", y = "Number of studies") +
@@ -184,24 +186,19 @@ HERMES_INCLUDED %>%
    mutate(across(everything(),~ gsub("NA",NA, .))) %>% 
   unique() %>% 
   drop_na()%>% 
-  mutate(status=ifelse(status=="Marketed","Approved drugs","Failed drugs")) %>% 
+  mutate(status=ifelse(status=="Marketed","Approved DMTs","Failed DMTs")) %>% 
     mutate(n=as.numeric(n)
   ) %>% 
-  # mutate(drugs=case_when(
-  #   drugs=="Glatiramer acetate"~"GA",
-  #   drugs=="Dimethyl fumarate"~"DMF",
-  #   drugs=="Peginterferon beta-1a"~"PEG-IFN beta-1a",
-  #   drugs=="Interferon Beta 1"~"IFN beta-1",
-  #   drugs=="Monomethyl fumarate"~"MMF",
-  #   drugs=="Epigallocatechin gallate"~"EGCG",
-  #   TRUE~drugs
-  # )) %>%
+  mutate(drugs=case_when(
+    drugs=="Interferon Beta 1"~"Interferon beta-1",
+    TRUE~drugs
+  )) %>%
 ggplot(aes(x = reorder(drugs, -n), y = n,fill=status,color=status)) +
   geom_bar(stat = "identity") +
-  labs(x = "Tested Drugs", y ="Number ofstudies") +
+  labs(x = "Tested Drugs", y ="Number of studies") +
   common_theme+
-  scale_fill_manual(values=c("Approved drugs"="#6896ca","Failed drugs"="#ff7b74"))+
-  scale_color_manual(values=c("Approved drugs"="#567ca7","Failed drugs"="#d0645e"))+
+  scale_fill_manual(values=c("Approved DMTs"="#6896ca","Failed DMTs"="#ff7b74"))+
+  scale_color_manual(values=c("Approved DMTs"="#567ca7","Failed DMTs"="#d0645e"))+
   theme(legend.title=element_blank())
 
 
@@ -211,8 +208,8 @@ figure_panel3<-grid.arrange(plot_row1,plot_row2,
                                     legend.text = element_text(size=13,color="gray20")),
                             ncol=1,heights=c(1,1,1.5))
 
-# ggsave("Figure2_final_longnames.png",figure_panel3,height = 29/2.5,width = 21/2.5)
-# ggsave("Figure2_final_longnames.svg",figure_panel3,height = 29/2.5,width = 21/2.5)
+ggsave("Figure2_final_longnames.png",figure_panel3,height = 29/2.5,width = 21/2.5)
+ggsave("Figure2_final_longnames.pdf",figure_panel3,height = 29/2.5,width = 21/2.5)
 ```
 
 
@@ -263,8 +260,8 @@ ggplot() +
     legend.position = "bottom") + 
   facet_grid(drug_status~.,scales="free_y",space="free")
 
-# ggsave("Figure6_timeline_final_strip_right.svg",panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
-# ggsave("Figure6_timeline_final_strip_right.pdf",panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
+ggsave("Figure6_timeline_final_strip_right.png",panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
+ggsave("Figure6_timeline_final_strip_right.pdf",panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
 
 ```
 
@@ -293,12 +290,12 @@ HERMES_INCLUDED %>% select(Tested.drug.s.,starts_with("MRI_4")) %>%  rename_with
          con_var=ifelse(var_measure=="SEM",con_var*sqrt(con_n),con_var)) %>%
 mutate(
   escalc( "SMD",
-    m2i = drug_mean,
-    n2i = drug_n,
-    sd2i = drug_var,
-    m1i = con_mean,
-    n1i = con_n,
-    sd1i = con_var,
+    m1i = drug_mean,
+    n1i = drug_n,
+    sd1i = drug_var,
+    m2i = con_mean,
+    n2i = con_n,
+    sd2i = con_var,
     data = . 
   )) %>%
   rename(Name=drug_name) %>%
@@ -360,15 +357,17 @@ mutate(color=ifelse(is.na(drug_mean),"overall",drug_status)) %>%
 
 MRI_EAE_ES_plot<-ES_df_trial2 %>% 
 ggplot(aes(y = rank2, x = yi))+
-  geom_segment(aes(y=rank2,yend=rank2,x=-3.5,xend=30),color="#f1f1f1",linewidth=0.4)+
+  geom_segment(aes(y=rank2,yend=rank2,x=3.5,xend=-30),color="#f1f1f1",linewidth=0.4)+
   geom_vline(xintercept = 0,linetype="dashed",color="gray20",linewidth=0.5) +
   geom_point(aes(fill=color,color=color,shape=color,alpha=color,size=color))+
   geom_segment(aes(y=rank2,yend=rank2,x=upper_CI,xend=lower_CI),color="#222222")+
-  geom_label(data = . %>% filter(grepl("Median",Name)),aes(label=Name,x=-4),label.size = NA,hjust=1,fontface="bold")+
-  geom_label(data = . %>% filter(!(grepl("Median",Name))),aes(label=Name,x=-4),label.size = NA,hjust=1)+
+  geom_label(data = . %>% filter(grepl("Median",Name)),aes(label=Name,x=4),label.size = NA,hjust=0,fontface="bold")+
+  geom_label(data = . %>% filter(!(grepl("Median",Name))),aes(label=Name,x=4),label.size = NA,hjust=0)+
   labs(x = "Tested Drugs", y = "Effect Size") +
   theme_minimal()+
-  theme(axis.title = element_blank(),
+  theme(
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(face="bold",vjust=-1.5,size=12),
     axis.text.x = element_text(size=14),
     axis.text.y = element_blank(),
     panel.grid.major.y =element_blank(),
@@ -385,16 +384,16 @@ ggplot(aes(y = rank2, x = yi))+
     scale_shape_manual(values=c("Approved"=21, "Failed"=21,"overall"=23),breaks=c("Approved","Failed"))+
     scale_size_manual(values=c("Approved"=4, "Failed"=4,"overall"=2),breaks=c("Approved","Failed"))+
   scale_y_reverse()+
-  scale_x_continuous(breaks=c(0,10,20))+
-  facet_wrap(.~item,ncol=1,scales = "free_y",strip.position="right")+
-   force_panelsizes(rows = c(1,0.30)) +
-  coord_cartesian(xlim=c(-20,NA))
+  scale_x_continuous(breaks=c(0,-10,-20))+
+  facet_wrap(.~item,ncol=1,scales = "free_y",strip.position="left")+
+   force_panelsizes(rows = c(1,0.30))+
+  coord_cartesian(xlim=c(NA,20))+
+  labs(x="Standardised Mean Difference")
   
+MRI_EAE_ES_plot
   
 ggsave("Figure4_ES_final.png",MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
-  
-
-#EAE_1_drug_mean, EAE_1_drug_n, EAE_1_drug_var, #EAE_1_con_mean, EAE_1_drug_n, EAE_1_drug_var
+ggsave("Figure4_ES_final.pdf",MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
 ```
 
 
