@@ -1,0 +1,276 @@
+---
+title: "RoB Mining validation"
+output: html_document
+date: "2023-07-25"
+---
+
+```{r}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(robvis)
+library(readxl)
+library(purrr)
+```
+
+```{r}
+MS_translation_extraction_rob <- read_excel("MS_translation_extraction.xlsx", 
+                                        sheet = "Interrater agreement+ Risk of B", 
+                                        range = "b1:bh66") %>% 
+  filter(!is.na(Author))
+mined_rob <- read_excel("mined_rob_with_addpaper.xlsx")
+```
+
+
+```{r}
+RoB_manual_clean<-
+  MS_translation_extraction_rob%>%
+  filter(!is.na(DOI)) %>% 
+  mutate(DOI=gsub("[[:punct:]\\s]", "", DOI)) %>% 
+  mutate(DOI=gsub(" ", "", DOI)) %>% 
+  select(DOI,Randomization,Blinding,`ARRIVE guidelines`,`Animal welfare statement`,`Sample size calculation`,
+        `Conflict of interest`)%>% 
+  rename(ARRIVE=`ARRIVE guidelines`,
+         Welfare=`Animal welfare statement`,
+         Samplesize=`Sample size calculation`,
+         Conflict=`Conflict of interest`) %>% 
+  select(DOI,Randomization,Blinding,Welfare,Conflict,Samplesize,ARRIVE) %>% 
+  setNames(paste0(names(.),"_manual")) %>% 
+  rename(DOI=DOI_manual) %>% 
+  mutate(across(ends_with("_manual"),~ gsub("2","0", .)))%>% 
+  mutate(across(ends_with("_manual"),~ gsub("NA","0", .)))
+```
+
+```{r}
+RoB_mined_clean<-
+  mined_rob %>% 
+  mutate(DOI=File.title) %>% 
+  mutate(DOI=gsub(".*/", "", DOI)) %>% 
+  mutate(DOI=gsub(".pdf", "", DOI)) %>% 
+  mutate(DOI=gsub("[[:punct:]\\s]", "", DOI)) %>% 
+  mutate(DOI=gsub(" ", "", DOI)) %>% 
+  select(DOI,Randomization,Blinding,Welfare,Conflict,Samplesize,ARRIVE) %>% 
+  setNames(paste0(names(.),"_mined")) %>% 
+  rename(DOI=DOI_mined)%>% 
+  mutate(across(ends_with("_mined"),~ gsub("not reported","0", .)))%>% 
+  mutate(across(ends_with("_mined"),~ gsub("yes","1", .)))
+```
+
+```{r}
+df_confmat<-data.frame()
+RoB_items<-c("Randomization","Blinding","Welfare","Conflict","Samplesize","ARRIVE")
+
+for(i in RoB_items){
+df_template<-data.frame(cbind(result=c("TN","TP","FN","FP"),na=NA))
+
+df_temp<-merge(RoB_manual_clean %>% select(DOI,paste0(i,"_manual")) %>% rename(manual=2),
+RoB_mined_clean %>% select(DOI,paste0(i,"_mined"))%>% rename(mined=2),by="DOI") %>% 
+  mutate(result=case_when(
+    manual==1&mined==1~"TP",
+    manual==1&mined==0~"FN",
+    manual==0&mined==1~"FP",
+    manual==0&mined==0~"TN",
+  ))%>%
+  group_by(result) %>% 
+  count()%>%
+  merge(.,df_template,by="result",all.y=T)  %>%
+  select(!(na)) %>%
+  replace_na(list(n=0)) %>%
+  pivot_wider(names_from = result,values_from = n)
+
+df<-data.frame(cbind(
+  item=i,
+  df_temp,
+  sensitivity=df_temp$TP/(df_temp$TP+df_temp$FN),
+  specificity=df_temp$TN/(df_temp$TN+df_temp$FP),
+  precision=df_temp$TP/(df_temp$TP+df_temp$FP),
+  F1=2*df_temp$TP/(2*df_temp$TP+df_temp$FP+df_temp$FN),
+    accuracy=(df_temp$TP+df_temp$TN)/(df_temp$TP+df_temp$TN+df_temp$FP+df_temp$FN)))
+
+  df_confmat<-rbind(df_confmat,df)
+
+}
+
+df_confmat %>% View()
+
+```
+
+```{r}
+rob_figure<-RoB_mined_clean %>% 
+  mutate(across(ends_with("_mined"),~ gsub("1","Low", .)))%>% 
+  mutate(across(ends_with("_mined"),~ gsub("0","High", .))) %>% 
+  rename(`ARRIVE guidelines`= ARRIVE_mined,
+         `Animal welfare statement` = Welfare_mined,
+         `Sample size calculation`=Samplesize_mined,
+         `Conflict of interest`=Conflict_mined,
+         Blinding=Blinding_mined,
+         Randomization=Randomization_mined) %>% 
+  pivot_longer(!DOI,names_to="item",values_to = "value") %>% 
+  group_by(item,value) %>% 
+  count() %>% 
+  filter(!(item=="Conflict of interest")) %>% 
+  ggplot() +
+        geom_bar(stat="identity",
+          aes(x=n,y = item,fill = value
+          ),width = 0.7,position = "fill",color = "black"
+        )+
+  guides(fill = guide_legend(reverse = TRUE)) +
+  scale_fill_manual("Risk of Bias",
+          values = c(High = "#ff574e", Low = "#7bcd5b"),
+          labels = c(High = "  High risk of bias  ",Low = "  Low risk of bias   "))+
+  scale_x_continuous(labels = scales::percent)+
+  theme(
+          axis.title.x = ggplot2::element_blank(),
+          axis.title.y = ggplot2::element_blank(),
+          axis.ticks.y = ggplot2::element_blank(),
+          axis.text.x=element_text(size=12),
+          axis.text.y = ggplot2::element_text(size = 12,
+                                              color = "black"),
+          axis.line.x = ggplot2::element_line(
+            colour = "black",
+            size = 0.5,
+            linetype = "solid"
+          ),
+          legend.position = "bottom",
+          panel.grid.major = ggplot2::element_blank(),
+          panel.grid.minor = ggplot2::element_blank(),
+          panel.background = ggplot2::element_blank(),
+          legend.background = ggplot2::element_rect(linetype = "solid",
+                                                    colour = "black"),
+          legend.title = ggplot2::element_blank(),
+          legend.key.size = ggplot2::unit(0.75, "cm"),
+          legend.text = ggplot2::element_text(size = 10)
+        )
+```
+
+```{r}
+ggsave("rob_plot_v2.png",rob_figure,width=7,height=4)
+ggsave("rob_plot_v2_withaddarticles.png",rob_figure,width=7,height=4, device='tiff', dpi=300)
+ggsave("rob_plot_v2_withaddarticles.tiff",rob_figure,width=7,height=4, device='tiff', dpi=300)
+```
+
+
+SYRCLE coding
+```{r}
+library(readr)
+HERMES_INCLUDED <- read_csv("HERMES_INCLUDED.csv")
+
+syrcle_plot<-HERMES_INCLUDED %>% 
+  filter(!(is.na(SYRCLE_allocation))) %>% 
+  select(c(DOI,starts_with("SYRCLE"))) %>% 
+  pivot_longer(!DOI) %>% 
+  group_by(name,value) %>% count() %>% ungroup() %>% 
+  mutate(n=n/50) %>% 
+  mutate(value=factor(value,levels=c("low","unclear","high"))) %>% 
+  mutate(name=case_when(
+    name=="SYRCLE_allocation"~"Allocation",
+name=="SYRCLE_allocationconcealment"~"Allocation concealment",
+name=="SYRCLE_baselinegroups"~"Baseline groups",
+name=="SYRCLE_blindingassessor"~"Blinding Assessor",
+name=="SYRCLE_blindingcaregiver"~"Blinding Caregiver",
+name=="SYRCLE_incompleteoutcome"~"Incomplete outcome",
+name=="SYRCLE_other"~"Other",
+name=="SYRCLE_randomassessment"~"Random Assessment",
+name=="SYRCLE_randomhousing"~"Random Housing",
+name=="SYRCLE_selectivereporting"~"Selective reporting"
+  )) %>% 
+ggplot() +
+        geom_bar(stat="identity",
+          aes(x=n,y = name,fill = value),width = 0.7,position = "fill",color = "black"
+        )+
+  guides(fill = guide_legend(reverse = TRUE)) +
+  scale_fill_manual("Risk of Bias",
+          values = c(high = "#ff574e", low = "#7bcd5b", unclear ="#fee44a"),
+          labels = c(high = "  High   ",low = "  Low   ",unclear="  Unclear   "))+
+  scale_x_continuous(labels = scales::percent)+
+  theme(
+          axis.title.x = ggplot2::element_blank(),
+          axis.title.y = ggplot2::element_blank(),
+          axis.ticks.y = ggplot2::element_blank(),
+          axis.text.x=element_text(size=12),
+          axis.text.y = ggplot2::element_text(size = 12,
+                                              color = "black"),
+          axis.line.x = ggplot2::element_line(
+            colour = "black",
+            size = 0.5,
+            linetype = "solid"
+          ),
+          legend.position = "bottom",
+          panel.grid.major = ggplot2::element_blank(),
+          panel.grid.minor = ggplot2::element_blank(),
+          panel.background = ggplot2::element_blank(),
+          legend.background = ggplot2::element_rect(linetype = "solid",
+                                                    colour = "black"),
+          legend.title = ggplot2::element_blank(),
+          legend.key.size = ggplot2::unit(0.75, "cm"),
+          legend.text = ggplot2::element_text(size = 10)
+        )
+```
+
+```{r}
+ggsave("SYRCLE_plot_v2.png",syrcle_plot,width=7,height=4)
+ggsave("SYRCLE_plot_v2.tiff",syrcle_plot,width=7,height=4, device='tiff', dpi=300)
+```
+
+
+Sensitivity study = run the analysis /figures with only those studies that have Blinding/Randomization/both. Here: generating 3 dataframes to then select the same studies in HERMES_INCLUDED.csv
+```{r}
+df_both_randblind<-mined_rob %>% 
+  filter(Blinding=="yes"&Randomization=="yes")%>% 
+  mutate(File.title=gsub(".pdf", "", File.title)) %>% 
+  mutate(File.title=gsub("Additional_papers/", "", File.title))  %>% 
+  mutate(File.title=gsub("PDFs_included_studies/", "", File.title)) %>% 
+  mutate(File.title=gsub("[[:punct:]\\s]", "", File.title)) %>% 
+  rename(DOI=File.title)
+
+df_blind<-mined_rob %>% 
+  filter(Blinding=="yes"&Randomization!="yes")%>% 
+  mutate(File.title=gsub(".pdf", "", File.title)) %>% 
+  mutate(File.title=gsub("Additional_papers/", "", File.title))  %>% 
+  mutate(File.title=gsub("PDFs_included_studies/", "", File.title)) %>% 
+  mutate(File.title=gsub("[[:punct:]\\s]", "", File.title)) %>% 
+  rename(DOI=File.title)
+
+df_rand<-
+  mined_rob %>% 
+  filter(Randomization=="yes"&Blinding!="yes")%>% 
+  mutate(File.title=gsub(".pdf", "", File.title)) %>% 
+  mutate(File.title=gsub("Additional_papers/", "", File.title))  %>% 
+  mutate(File.title=gsub("PDFs_included_studies/", "", File.title)) %>% 
+  mutate(File.title=gsub("[[:punct:]\\s]", "", File.title)) %>% 
+  rename(DOI=File.title)
+    
+
+HERMES_INCLUDED_rand<-
+HERMES_INCLUDED%>%
+  mutate(DOI=gsub(".pdf", "", DOI)) %>% 
+  mutate(DOI=gsub("[[:punct:]\\s]", "", DOI)) %>% 
+  mutate(DOI=gsub(" ", "", DOI)) %>% 
+  merge(.,df_rand,by="DOI") %>% 
+  mutate(subset_sensitivity="rand")
+
+HERMES_INCLUDED_blind<-
+HERMES_INCLUDED%>%
+  mutate(DOI=gsub(".pdf", "", DOI)) %>% 
+  mutate(DOI=gsub("[[:punct:]\\s]", "", DOI)) %>% 
+  mutate(DOI=gsub(" ", "", DOI)) %>% 
+  merge(.,df_blind,by="DOI")%>% 
+  mutate(subset_sensitivity="blind")
+
+HERMES_INCLUDED_both_randblind<-
+HERMES_INCLUDED%>%
+  mutate(DOI=gsub(".pdf", "", DOI)) %>% 
+  mutate(DOI=gsub("[[:punct:]\\s]", "", DOI)) %>% 
+  mutate(DOI=gsub(" ", "", DOI)) %>% 
+  merge(.,df_both_randblind,by="DOI")%>% 
+  mutate(subset_sensitivity="both")
+
+
+data_sensitivity_analysis_HERMES_INCLUDED<-rbind(HERMES_INCLUDED_rand,HERMES_INCLUDED_blind,HERMES_INCLUDED_both_randblind) %>% 
+  select(subset_sensitivity,everything())
+
+write.csv(data_sensitivity_analysis_HERMES_INCLUDED,"HERMES_INCLUDED_sensitivity.csv")
+
+
+```
+

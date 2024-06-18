@@ -148,12 +148,10 @@ ggsave("rob_plot_v2.png",rob_figure,width=7,height=4)
 ```
 
 
-
-
-
-
-
-
+```{r}
+RoB_mined_clean %>% 
+  filter(Blinding_mined==1) %>% nrow()
+```
 
 
 

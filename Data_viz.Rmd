@@ -208,8 +208,9 @@ figure_panel3<-grid.arrange(plot_row1,plot_row2,
                                     legend.text = element_text(size=13,color="gray20")),
                             ncol=1,heights=c(1,1,1.5))
 
-ggsave("Figure2_final_longnames.png",figure_panel3,height = 29/2.5,width = 21/2.5)
-ggsave("Figure2_final_longnames.pdf",figure_panel3,height = 29/2.5,width = 21/2.5)
+ggsave("Figure2_final_longnames_updated.png",figure_panel3,height = 29/2.5,width = 21/2.5)
+ggsave("Figure2_final_longnames_updated.pdf",figure_panel3,height = 29/2.5,width = 21/2.5)
+ggsave("Figure2_final_longnames_updated.tiff",dpi=300,figure_panel3,height = 29/2.5,width = 21/2.5)
 ```
 
 
@@ -260,8 +261,9 @@ ggplot() +
     legend.position = "bottom") + 
   facet_grid(drug_status~.,scales="free_y",space="free")
 
-ggsave("Figure6_timeline_final_strip_right.png",panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
-ggsave("Figure6_timeline_final_strip_right.pdf",panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
+ggsave("Figure6_timeline_final_strip_right_updated.png",panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
+ggsave("Figure6_timeline_final_strip_right_updated.pdf",panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
+ggsave("Figure6_timeline_final_strip_right_updated.tiff",dpi=300,panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
 
 ```
 
@@ -392,9 +394,51 @@ ggplot(aes(y = rank2, x = yi))+
   
 MRI_EAE_ES_plot
   
-ggsave("Figure4_ES_final.png",MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
-ggsave("Figure4_ES_final.pdf",MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
+ggsave("Figure4_ES_final_updated.png",MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
+ggsave("Figure4_ES_final_updated.pdf",MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
+ggsave("Figure4_ES_final_updated.tiff",dpi=300,MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
 ```
+
+#Rationale of studies - pia's extraction
+```{r message=FALSE, warning=FALSE,fig.width=5,fig.height=7}
+justification_beforeapproval_df <- read_csv("justification_beforeapproval_df.csv") %>% 
+  mutate(df="justification_beforeapproval_df")%>% 
+  rename(item=1)
+justification_allstudies_df <- read_csv("justification_allstudies_df.csv")%>% 
+  mutate(df="justification_allstudies_df")%>% 
+  rename(item=1)
+justification_afterapproval_df <- read_csv("justification_afterapproval_df.csv")%>% 
+  mutate(df="justification_afterapproval_df") %>% 
+  rename(item=1)
+
+rbind(justification_beforeapproval_df,justification_allstudies_df,justification_afterapproval_df) %>% 
+  mutate(df=case_when(
+    df=="justification_beforeapproval_df"~"Before approval",
+    df=="justification_allstudies_df"~"All studies",
+    df=="justification_afterapproval_df"~"After approval",
+  )) %>% 
+  arrange(df,Freq) %>% 
+  mutate(order_y=paste0("ord",1:n())) %>% 
+  ggplot(aes(x=Freq,y=reorder(item,Freq)))+
+  geom_bar(stat = "identity", fill = "#b6b6b6",color="#929292")+
+  common_theme+
+  theme(
+  strip.text.x = element_text(hjust=0,size=12),
+  axis.title.y = element_blank(),
+  axis.text.x = element_text(angle = 0,hjust=0.5),
+  panel.grid.major.y = element_blank(),
+  panel.grid.major.x = element_line(),
+    strip.background = element_rect(fill="#e8eae7",color="#cbccca"),
+  strip.text = element_text(hjust=0.5,size=11)
+  )+ 
+  facet_wrap(df~.,scales="free",ncol=1, strip.position="right")
+  
+
+```
+
+
+
+
 
 
 ```{r}
