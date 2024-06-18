@@ -13,6 +13,7 @@ library(scales)
 library(gridExtra)
 library(forcats)
 library(readxl)
+library(readr)
 library(ggpubr)
 library(ggplot2)
 library(purrr)
@@ -401,25 +402,31 @@ ggsave("Figure4_ES_final_updated.tiff",dpi=300,MRI_EAE_ES_plot,height = 29/3,wid
 
 #Rationale of studies - pia's extraction
 ```{r message=FALSE, warning=FALSE,fig.width=5,fig.height=7}
-justification_beforeapproval_df <- read_csv("justification_beforeapproval_df.csv") %>% 
+justification_beforeapproval_df <-
+  read_csv("justification_beforeapproval_df.csv") %>% 
   mutate(df="justification_beforeapproval_df")%>% 
-  rename(item=1)
-justification_allstudies_df <- read_csv("justification_allstudies_df.csv")%>% 
+  rename(item=1) %>% arrange(Freq) %>% mutate(order_y=1:n()+20)
+justification_allstudies_df <-
+  read_csv("justification_allstudies_df.csv")%>% 
   mutate(df="justification_allstudies_df")%>% 
-  rename(item=1)
-justification_afterapproval_df <- read_csv("justification_afterapproval_df.csv")%>% 
+  rename(item=1) %>% arrange(Freq) %>% mutate(order_y=1:n())
+justification_afterapproval_df <-
+  read_csv("justification_afterapproval_df.csv")%>% 
   mutate(df="justification_afterapproval_df") %>% 
-  rename(item=1)
+  rename(item=1) %>% arrange(Freq) %>% mutate(order_y=1:n()+40)
 
-rbind(justification_beforeapproval_df,justification_allstudies_df,justification_afterapproval_df) %>% 
+plot_df_motivation<-rbind(justification_beforeapproval_df,justification_allstudies_df,justification_afterapproval_df) %>% 
   mutate(df=case_when(
     df=="justification_beforeapproval_df"~"Before approval",
     df=="justification_allstudies_df"~"All studies",
     df=="justification_afterapproval_df"~"After approval",
   )) %>% 
-  arrange(df,Freq) %>% 
-  mutate(order_y=paste0("ord",1:n())) %>% 
-  ggplot(aes(x=Freq,y=reorder(item,Freq)))+
+  arrange(order_y) %>% mutate(order_y=1:n())
+
+all_studies_plot<-
+  plot_df_motivation %>% 
+  filter(df=="All studies")  %>%  
+ggplot(aes(x=Freq,y=reorder(item,order_y)))+
   geom_bar(stat = "identity", fill = "#b6b6b6",color="#929292")+
   common_theme+
   theme(
@@ -430,9 +437,51 @@ rbind(justification_beforeapproval_df,justification_allstudies_df,justification_
   panel.grid.major.x = element_line(),
     strip.background = element_rect(fill="#e8eae7",color="#cbccca"),
   strip.text = element_text(hjust=0.5,size=11)
-  )+ 
+  )+
   facet_wrap(df~.,scales="free",ncol=1, strip.position="right")
-  
+   
+after_approval_plot<-
+  plot_df_motivation %>% 
+  filter(df=="After approval")  %>%  
+ggplot(aes(x=Freq,y=reorder(item,order_y)))+
+  geom_bar(stat = "identity", fill = "#b6b6b6",color="#929292")+
+  common_theme+
+  theme(
+  strip.text.x = element_text(hjust=0,size=12),
+  axis.title.y = element_blank(),
+  axis.text.x = element_text(angle = 0,hjust=0.5),
+  panel.grid.major.y = element_blank(),
+  panel.grid.major.x = element_line(),
+    strip.background = element_rect(fill="#e8eae7",color="#cbccca"),
+  strip.text = element_text(hjust=0.5,size=11)
+  )+
+  facet_wrap(df~.,scales="free",ncol=1, strip.position="right")
+   
+
+before_approval_plot<-
+  plot_df_motivation %>% 
+  filter(df=="Before approval")  %>%  
+ggplot(aes(x=Freq,y=reorder(item,order_y)))+
+  geom_bar(stat = "identity", fill = "#b6b6b6",color="#929292")+
+  common_theme+
+  theme(
+  strip.text.x = element_text(hjust=0,size=12),
+  axis.title.y = element_blank(),
+  axis.text.x = element_text(angle = 0,hjust=0.5),
+  panel.grid.major.y = element_blank(),
+  panel.grid.major.x = element_line(),
+    strip.background = element_rect(fill="#e8eae7",color="#cbccca"),
+  strip.text = element_text(hjust=0.5,size=11)
+  )+
+  facet_wrap(df~.,scales="free",ncol=1, strip.position="right")
+   
+
+motivationplots_arranged<-ggarrange(all_studies_plot,before_approval_plot,after_approval_plot,ncol=1,heights = c(1,0.8,1))
+
+ggsave("motivation_plot.png",motivationplots_arranged,height = 28/4,width = 20/4,bg = "white")
+ggsave("motivation_plot.pdf",motivationplots_arranged,height = 28/4,width = 20/4,bg = "white")
+ggsave("motivation_plot.tiff",dpi=300,motivationplots_arranged,height = 28/4,width = 20/4,bg = "white")
+
 
 ```
 
