@@ -11,6 +11,7 @@ library(dplyr)
 library(tidyr)
 library(scales)
 library(gridExtra)
+library(grid)
 library(forcats)
 library(readxl)
 library(ggpubr)
@@ -33,8 +34,17 @@ Fig6: Timeline - FDA
 Fig7: Survival analysis - Ben
 
 Data prep
-```{r message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, fig.show='asis'}
+fig_panelDescr<-list()
+for(i in c("Randomization","Blinding","Both")){
+
 HERMES_INCLUDED <- read.csv("HERMES_INCLUDED_sensitivity.csv")%>%
+  mutate(subset_sensitivity=case_when(
+    subset_sensitivity=="rand"~"Randomization",
+    subset_sensitivity=="blind"~"Blinding",
+    subset_sensitivity=="both"~"Both"
+  )) %>% 
+      filter(subset_sensitivity==i) %>% #rand blind both
   mutate(Tested.drug.s.=str_split(Tested.drug.s., ',')) %>% 
     unnest(Tested.drug.s.) %>% 
     mutate(Tested.drug.s.=trimws(Tested.drug.s.)) %>% 
@@ -77,10 +87,6 @@ HERMES_INCLUDED %>%
   rename(Name=`Drug name`) %>%
   drop_na(Name),by="Name")
 
-```
-
-Figure 2 - exploratory statistics panel - DONE
-```{r fig.width=7,fig.height=10}
 df_row1<-rbind(HERMES_INCLUDED_splitting_species%>%
                  filter(exclude_duplicate_study=="no") %>% 
   mutate(Species=gsub("mosue","mouse",Species)) %>% 
@@ -115,33 +121,33 @@ HERMES_INCLUDED %>%
   mutate(item="B. Animal model") %>% 
   rename(Category=Animal.model,n=Frequency))
 
-labels_row1<-list("A. Species"=bquote(bold("A.")~"Species"),"B. Animal model"=bquote(bold("B.")~"Animal model"))
+labels_row1<-list("A. Species"=bquote(bold("a.")~"Species"),"B. Animal model"=bquote(bold("b.")~"Animal model"))
 labeller_row1 <- function(variable,value){
   return(labels_row1[value])}
 
 plot_row1<-
 df_row1%>% 
   mutate(Category=gsub("TMEV-IDD","TMEV",Category)) %>% 
+  ungroup() %>% 
   ggplot(aes(x = reorder(Category, -n), y = n)) +
   geom_bar(stat = "identity", fill = "#b6b6b6",color="#929292") +
   labs(x = "Animal Model", y = "Number of studies") +
-  ylim(0, 440) +
   common_theme+
   facet_wrap(.~item,scales = "free_x",labeller = labeller_row1)+
   theme(
   strip.text.x = element_text(hjust=0,size=12),
   panel.spacing = unit(1.5, "lines"))
 
-
 df_row2<-rbind(HERMES_INCLUDED %>%
                  filter(exclude_duplicate_study=="no") %>% 
-  mutate(Sex=str_to_title(gsub("\\bboth\\b","both sexes",Sex))) %>% 
+  mutate(Sex=str_to_title(gsub("\\bboth\\b","both sexes",Sex.x))) %>% 
   group_by(Sex) %>%
   summarise(Frequency = n()) %>%
   ungroup() %>% 
   mutate(Sex=gsub("Na",NA,Sex),Sex=gsub("Both Sexes","Both sexes",Sex))%>% 
   mutate(item="C. Sex") %>% 
   rename(Category=Sex,n=Frequency),
+
 HERMES_INCLUDED %>%
                  filter(exclude_duplicate_study=="no") %>% 
   group_by(Strain) %>%
@@ -160,7 +166,7 @@ HERMES_INCLUDED %>%
   mutate(item="D. Strain") %>% 
   rename(Category=Strain,n=Frequency))
 
-labels_row2<-list("C. Sex"=bquote(bold("C.")~"Sex"),"D. Strain"=bquote(bold("D.")~"Strain"))
+labels_row2<-list("C. Sex"=bquote(bold("c.")~"Sex"),"D. Strain"=bquote(bold("d.")~"Strain"))
 labeller_row2 <- function(variable,value){
   return(labels_row2[value])}
 
@@ -169,7 +175,6 @@ plot_row2<-df_row2%>%
   ggplot(aes(x = reorder(Category, -n), y = n)) +
   geom_bar(stat = "identity", fill = "#b6b6b6",color="#929292") +
   labs(x = "Animal Model", y = "Number of studies") +
-  ylim(0, 320) +
   common_theme+
   facet_grid(. ~ item,scales = "free", labeller=labeller_row2)+
   theme(
@@ -202,23 +207,83 @@ ggplot(aes(x = reorder(drugs, -n), y = n,fill=status,color=status)) +
   theme(legend.title=element_blank())
 
 
-figure_panel3<-grid.arrange(plot_row1,plot_row2,
-                            p3+ggtitle(bquote(bold("E.")~"Tested drugs"))+
+combined_plot <- grid.arrange(plot_row1,plot_row2,
+                            p3+ggtitle(bquote(bold("e.")~"Tested drugs"))+
                               theme(legend.position = "bottom",
                                     legend.text = element_text(size=13,color="gray20")),
-                            ncol=1,heights=c(1,1,1.5))
+                            ncol=1,heights=c(1.1,1,1.5))
 
-ggsave("Figure2_final_longnames_updated.png",figure_panel3,height = 29/2.5,width = 21/2.5)
-ggsave("Figure2_final_longnames_updated.pdf",figure_panel3,height = 29/2.5,width = 21/2.5)
-ggsave("Figure2_final_longnames_updated.tiff",dpi=300,figure_panel3,height = 29/2.5,width = 21/2.5)
+overall_title <- textGrob(i, gp = gpar(fontsize = 16, fontface = "bold"), vjust = 1.5)
+
+
+fig_panelDescr[[i]]<-grid.arrange(arrangeGrob(overall_title = overall_title, combined_plot, nrow = 2, heights = c(0.1, 1)))
+}
+
+
+
+ggsave("SensitivityAnalysis/Figure2_final_longnames_rand.tiff",ggarrange(fig_panelDescr[["Both"]],
+          fig_panelDescr[["Blinding"]],
+          fig_panelDescr[["Randomization"]],nrow=1),height = 29/2.5,width = 40/2.5,bg="white")
 ```
 
 
+```{r}
 
-Figure 6 - FDA/first-in-human panel - DONE
-```{r fig.width=7,fig.height=10}
+fig_panelFDA<-list()
+for(i in c("Randomization","Blinding","Both")){
+
+HERMES_INCLUDED <- read.csv("HERMES_INCLUDED_sensitivity.csv")%>%
+  mutate(subset_sensitivity=case_when(
+    subset_sensitivity=="rand"~"Randomization",
+    subset_sensitivity=="blind"~"Blinding",
+    subset_sensitivity=="both"~"Both"
+  )) %>% 
+      filter(subset_sensitivity==i) %>% #rand blind both
+  mutate(Tested.drug.s.=str_split(Tested.drug.s., ',')) %>% 
+    unnest(Tested.drug.s.) %>% 
+    mutate(Tested.drug.s.=trimws(Tested.drug.s.)) %>% 
+  ungroup() 
+
+HERMES_INCLUDED_splitting_species <- HERMES_INCLUDED%>%
+  mutate(Species = str_split(Species_in_study, ", ")) %>% 
+  unnest(Species) %>%
+  mutate(Species = case_when(
+    Species == "monkeys" ~ "monkey",
+    TRUE ~ Species)) #this should run only if we decide to split the species column
+
+
+Drug_CV_Data <- read_excel("MS_translation_extraction.xlsx", 
+                           sheet = "Drug_CV", na="")%>%
+  mutate_all(~replace(., . == "NA", "NR")) %>%
+  mutate_all(as.character) %>%
+  mutate_all(~replace(., . == "NR", NA))%>%
+  rename(`First in human trial`=First_human) %>% 
+  filter(!is.na(`First in human trial`))
+
+
+drug_info_df<-merge(rbind(
+  HERMES_INCLUDED%>% 
+                 filter(exclude_duplicate_study=="no") %>% group_by(Tested.drug.2,status2) %>% count() %>% rename(drugs=1,status=2),
+HERMES_INCLUDED %>% 
+                 filter(exclude_duplicate_study=="no") %>% group_by(Tested.drug.s.,status) %>% count() %>% rename(drugs=1,status=2)) %>% 
+  rename(drug_status=status,Name=drugs) %>% 
+  select(!(n)) %>% unique() %>% drop_na(),
+Drug_CV_Data %>% 
+  rename(`FDA Approval for MS`=FDA_approval,Name=Drug) %>% 
+  select(Name,`FDA Approval for MS`,`First in human trial`),by="Name")
+
+df_fig_6<-merge(drug_info_df,
+HERMES_INCLUDED %>% 
+                 filter(exclude_duplicate_study=="no")%>%
+  pivot_longer(cols = starts_with("Tested.drug"),
+               names_to = "Drug",
+               values_to = "Drug name") %>% 
+  rename(Name=`Drug name`) %>%
+  drop_na(Name),by="Name")
+
 df_fig6_facet<-
   rbind(df_fig_6 %>% 
+          rename(Year=Year.x) %>% 
   select(Name,Year,drug_status) %>% 
   mutate(item="Animal studies"),
 
@@ -262,18 +327,87 @@ ggplot() +
     legend.position = "bottom") + 
   facet_grid(drug_status~.,scales="free_y",space="free")
 
-ggsave("Figure6_timeline_final_strip_right_updated.png",panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
-ggsave("Figure6_timeline_final_strip_right_updated.pdf",panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
-ggsave("Figure6_timeline_final_strip_right_updated.tiff",dpi=300,panel_fig_FDA,height = 29/2.7,width = 21/2.7,bg = "white")
+
+overall_title <- textGrob(i, gp = gpar(fontsize = 16, fontface = "bold"), vjust = 1.5)
+
+
+
+fig_panelFDA[[i]]<-grid.arrange(arrangeGrob(overall_title = overall_title, panel_fig_FDA, nrow = 2, heights = c(0.1, 1)))
+}
+
+
+ggsave("SensitivityAnalysis/Figure6_timeline_sensitivity.tiff",ggarrange(fig_panelFDA[["Both"]],
+          fig_panelFDA[["Blinding"]],
+          fig_panelFDA[["Randomization"]],nrow=1),height = 29/2.5,width = 40/2.5,bg="white")
 
 ```
+
 
 ```{r}
-# HERMES_INCLUDED %>% select(starts_with("EAE_"),starts_with("EAE_")) %>% names()%>% data.frame() %>% View()
-```
 
-Figure 4 - ES - DONE
-```{r fig.height=7, fig.width=6, message=FALSE, warning=FALSE}
+fig_panelES<-list()
+for(i in c("Randomization","Blinding","Both")){
+
+HERMES_INCLUDED <- read.csv("HERMES_INCLUDED_sensitivity.csv")%>%
+  mutate(subset_sensitivity=case_when(
+    subset_sensitivity=="rand"~"Randomization",
+    subset_sensitivity=="blind"~"Blinding",
+    subset_sensitivity=="both"~"Both"
+  )) %>% 
+      filter(subset_sensitivity==i) %>% #rand blind both
+  mutate(Tested.drug.s.=str_split(Tested.drug.s., ',')) %>% 
+    unnest(Tested.drug.s.) %>% 
+    mutate(Tested.drug.s.=trimws(Tested.drug.s.)) %>% 
+  ungroup() 
+
+HERMES_INCLUDED_splitting_species <- HERMES_INCLUDED%>%
+  mutate(Species = str_split(Species_in_study, ", ")) %>% 
+  unnest(Species) %>%
+  mutate(Species = case_when(
+    Species == "monkeys" ~ "monkey",
+    TRUE ~ Species)) #this should run only if we decide to split the species column
+
+
+Drug_CV_Data <- read_excel("MS_translation_extraction.xlsx", 
+                           sheet = "Drug_CV", na="")%>%
+  mutate_all(~replace(., . == "NA", "NR")) %>%
+  mutate_all(as.character) %>%
+  mutate_all(~replace(., . == "NR", NA))%>%
+  rename(`First in human trial`=First_human) %>% 
+  filter(!is.na(`First in human trial`))
+
+
+drug_info_df<-merge(rbind(
+  HERMES_INCLUDED%>% 
+                 filter(exclude_duplicate_study=="no") %>% group_by(Tested.drug.2,status2) %>% count() %>% rename(drugs=1,status=2),
+HERMES_INCLUDED %>% 
+                 filter(exclude_duplicate_study=="no") %>% group_by(Tested.drug.s.,status) %>% count() %>% rename(drugs=1,status=2)) %>% 
+  rename(drug_status=status,Name=drugs) %>% 
+  select(!(n)) %>% unique() %>% drop_na(),
+Drug_CV_Data %>% 
+  rename(`FDA Approval for MS`=FDA_approval,Name=Drug) %>% 
+  select(Name,`FDA Approval for MS`,`First in human trial`),by="Name")
+
+df_fig_6<-merge(drug_info_df,
+HERMES_INCLUDED %>% 
+                 filter(exclude_duplicate_study=="no")%>%
+  pivot_longer(cols = starts_with("Tested.drug"),
+               names_to = "Drug",
+               values_to = "Drug name") %>% 
+  rename(Name=`Drug name`) %>%
+  drop_na(Name),by="Name")
+
+df_fig6_facet<-
+  rbind(df_fig_6 %>% 
+          rename(Year=Year.x) %>% 
+  select(Name,Year,drug_status) %>% 
+  mutate(item="Animal studies"),
+
+drug_info_df %>% 
+  pivot_longer(cols=3:4,names_to="item",values_to = "Year")) %>% 
+  rename(`Drug name`=Name)
+
+
 ES_df_trial<-rbind(rbind(HERMES_INCLUDED %>% select(Tested.drug.s.,starts_with("EAE_1")) %>%  rename_with(~gsub("_1", "", .), contains("_1")) %>% rename(drug_name=1),
 HERMES_INCLUDED %>% select(Tested.drug.2,starts_with("EAE_2")) %>%  rename_with(~gsub("_2", "", .), contains("_2"))%>% rename(drug_name=1),
 HERMES_INCLUDED %>% select(Tested.drug.3,starts_with("EAE_3")) %>%  rename_with(~gsub("_3", "", .), contains("_3"))%>% rename(drug_name=1)) %>%  rename_with(~gsub("EAE_", "", .), contains("EAE_")) %>% mutate(item="EAE"),
@@ -392,12 +526,28 @@ ggplot(aes(y = rank2, x = yi))+
    force_panelsizes(rows = c(1,0.30))+
   coord_cartesian(xlim=c(NA,20))+
   labs(x="Standardised Mean Difference")
-  
-MRI_EAE_ES_plot
-  
-ggsave("Figure4_ES_final_updated.png",MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
-ggsave("Figure4_ES_final_updated.pdf",MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
-ggsave("Figure4_ES_final_updated.tiff",dpi=300,MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
+
+overall_title <- textGrob(i, gp = gpar(fontsize = 16, fontface = "bold"), vjust = 1.5)
+
+
+
+fig_panelES[[i]]<-grid.arrange(arrangeGrob(overall_title = overall_title, MRI_EAE_ES_plot, nrow = 2, heights = c(0.1, 1)))
+}
+
+
+ggsave("SensitivityAnalysis/FigureES_sensitivity.tiff",ggarrange(fig_panelES[["Both"]],
+          fig_panelES[["Blinding"]],
+          fig_panelES[["Randomization"]],nrow=1),height = 29/2.5,width = 40/2.5,bg="white")
+
+
+
+
 ```
+
+
+
+
+
+
 
 

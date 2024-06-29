@@ -1,8 +1,9 @@
 library(shiny)
 library(readr)
-HERMES_INCLUDED_sensitivity <- read_csv("HERMES_INCLUDED_sensitivity.csv")
-
-
+HERMES_INCLUDED_sensitivity <- read_csv("HERMES_INCLUDED_sensitivity.csv") %>% 
+  select(!c(Year.y,Sex.y)) %>%
+  rename(Year=Year.x,
+         Sex=Sex.x)
 
 
 ui <- fluidPage(
@@ -19,15 +20,24 @@ ui <- fluidPage(
         ),
 
         # Show a plot of the generated distribution
+
         mainPanel(
-           plotOutput("Plot")
-        )
+                  tabsetPanel(
+                    tabPanel("Figure 1",plotOutput("Plot1",height = 600)),
+                    tabPanel("Figure 2",plotOutput("Plot2",height = 600)),
+                    tabPanel("Figure 3",plotOutput("Plot3",height = 600)))),
+        
+        
+        
+        
     )
 )
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+  output$Plot1 <- renderPlot({
 
+    HERMES_INCLUDED<-
   HERMES_INCLUDED_sensitivity%>%
     filter(subset_sensitivity==input$rob) %>% 
     mutate(Tested.drug.s.=str_split(Tested.drug.s., ',')) %>% 
@@ -193,7 +203,7 @@ server <- function(input, output) {
     theme(legend.title=element_blank())
   
   
-    output$Plot <- renderPlot({
+
         
       grid.arrange(plot_row1,plot_row2,
                    p3+ggtitle(bquote(bold("E.")~"Tested drugs"))+
@@ -202,6 +212,266 @@ server <- function(input, output) {
                    ncol=1,heights=c(1,1,1.5))
       
     })
+  
+  output$Plot2 <- renderPlot({ 
+   
+    HERMES_INCLUDED<-
+      HERMES_INCLUDED_sensitivity%>%
+      filter(subset_sensitivity==input$rob) %>% 
+      mutate(Tested.drug.s.=str_split(Tested.drug.s., ',')) %>% 
+      unnest(Tested.drug.s.) %>% 
+      mutate(Tested.drug.s.=trimws(Tested.drug.s.)) %>% 
+      ungroup() 
+    
+    HERMES_INCLUDED_splitting_species <- HERMES_INCLUDED%>%
+      mutate(Species = str_split(Species_in_study, ", ")) %>% 
+      unnest(Species) %>%
+      mutate(Species = case_when(
+        Species == "monkeys" ~ "monkey",
+        TRUE ~ Species)) #this should run only if we decide to split the species column
+    
+    
+    Drug_CV_Data <- read_excel("MS_translation_extraction.xlsx", 
+                               sheet = "Drug_CV", na="")%>%
+      mutate_all(~replace(., . == "NA", "NR")) %>%
+      mutate_all(as.character) %>%
+      mutate_all(~replace(., . == "NR", NA))%>%
+      rename(`First in human trial`=First_human) %>% 
+      filter(!is.na(`First in human trial`))
+    
+    
+    drug_info_df<-merge(rbind(
+      HERMES_INCLUDED%>% 
+        filter(exclude_duplicate_study=="no") %>% group_by(Tested.drug.2,status2) %>% count() %>% rename(drugs=1,status=2),
+      HERMES_INCLUDED %>% 
+        filter(exclude_duplicate_study=="no") %>% group_by(Tested.drug.s.,status) %>% count() %>% rename(drugs=1,status=2)) %>% 
+        rename(drug_status=status,Name=drugs) %>% 
+        select(!(n)) %>% unique() %>% drop_na(),
+      Drug_CV_Data %>% 
+        rename(`FDA Approval for MS`=FDA_approval,Name=Drug) %>% 
+        select(Name,`FDA Approval for MS`,`First in human trial`),by="Name")
+    
+    df_fig_6<-merge(drug_info_df,
+                    HERMES_INCLUDED %>% 
+                      filter(exclude_duplicate_study=="no")%>%
+                      pivot_longer(cols = starts_with("Tested.drug"),
+                                   names_to = "Drug",
+                                   values_to = "Drug name") %>% 
+                      rename(Name=`Drug name`) %>%
+                      drop_na(Name),by="Name")
+    
+    
+     df_fig6_facet<-
+      rbind(df_fig_6 %>% 
+              select(Name,Year,drug_status) %>% 
+              mutate(item="Animal studies"),
+            
+            drug_info_df %>% 
+              pivot_longer(cols=3:4,names_to="item",values_to = "Year")) %>% 
+      rename(`Drug name`=Name)
+    
+    df_fig6_facet %>% 
+      filter(item=="Animal studies") %>% 
+      group_by(`Drug name`) %>% 
+      summarise(first_animal_study=as.numeric(min(Year))) %>% 
+      merge(.,df_fig6_facet,by="Drug name") %>%   
+      mutate(item=case_when(
+        item=="FDA Approval for MS"~"FDA approval",
+        item=="First in human trial"~"First-in-human trial",
+        TRUE~item
+      )) %>% 
+      mutate(item=factor(item,levels=c("First-in-human trial","FDA approval","Animal studies")),
+             Year=as.numeric(Year)) %>%
+      drop_na(Year) %>%
+      mutate(`Drug name`=gsub("Interferon Beta 1","Interferon beta-1",`Drug name`),
+             drug_status=ifelse(drug_status=="Marketed","Approved","Failed"),
+             sort=case_when(item=="Animal studies"~3,item=="FDA approval"~2,item=="First-in-human trial"~1)) %>%
+      arrange(-sort) %>% 
+      ggplot() +
+      geom_beeswarm(aes(x=Year,y=reorder(`Drug name`,-first_animal_study),fill=item,alpha=item),
+                    cex=0.6,alpha=0.9,size=4,shape=21,color="gray40")+
+      theme_minimal() +
+      labs(x = "Year",y = "Drug name") +
+      scale_fill_manual(values=c("FDA approval"="#ffa600","First-in-human trial"="#59b13d","Animal studies"="#e8eae7"))+
+      scale_alpha_manual(values=c("Animal studies"=0.5,"First-in-human trial"=1,"FDA approval"=1))+
+      theme(panel.grid.minor = element_blank(),
+            axis.text = element_text(size=14),
+            axis.title = element_text(size=16),
+            legend.title = element_blank(),
+            strip.text = element_text(size=14),
+            strip.background = element_rect(fill="#e8eae7",color="#cbccca"),
+            legend.text = element_text(size=12),
+            axis.title.y = element_blank(),
+            legend.position = "bottom") + 
+      facet_grid(drug_status~.,scales="free_y",space="free")
+    
+    })
+  
+  
+  output$Plot3<-renderPlot({
+    
+    
+    HERMES_INCLUDED<-
+      HERMES_INCLUDED_sensitivity%>%
+      filter(subset_sensitivity==input$rob) %>% 
+      mutate(Tested.drug.s.=str_split(Tested.drug.s., ',')) %>% 
+      unnest(Tested.drug.s.) %>% 
+      mutate(Tested.drug.s.=trimws(Tested.drug.s.)) %>% 
+      ungroup() 
+    
+    HERMES_INCLUDED_splitting_species <- HERMES_INCLUDED%>%
+      mutate(Species = str_split(Species_in_study, ", ")) %>% 
+      unnest(Species) %>%
+      mutate(Species = case_when(
+        Species == "monkeys" ~ "monkey",
+        TRUE ~ Species)) #this should run only if we decide to split the species column
+    
+    
+    Drug_CV_Data <- read_excel("MS_translation_extraction.xlsx", 
+                               sheet = "Drug_CV", na="")%>%
+      mutate_all(~replace(., . == "NA", "NR")) %>%
+      mutate_all(as.character) %>%
+      mutate_all(~replace(., . == "NR", NA))%>%
+      rename(`First in human trial`=First_human) %>% 
+      filter(!is.na(`First in human trial`))
+    
+    
+    drug_info_df<-merge(rbind(
+      HERMES_INCLUDED%>% 
+        filter(exclude_duplicate_study=="no") %>% group_by(Tested.drug.2,status2) %>% count() %>% rename(drugs=1,status=2),
+      HERMES_INCLUDED %>% 
+        filter(exclude_duplicate_study=="no") %>% group_by(Tested.drug.s.,status) %>% count() %>% rename(drugs=1,status=2)) %>% 
+        rename(drug_status=status,Name=drugs) %>% 
+        select(!(n)) %>% unique() %>% drop_na(),
+      Drug_CV_Data %>% 
+        rename(`FDA Approval for MS`=FDA_approval,Name=Drug) %>% 
+        select(Name,`FDA Approval for MS`,`First in human trial`),by="Name")
+    
+    
+    ES_df_trial<-rbind(rbind(HERMES_INCLUDED %>% select(Tested.drug.s.,starts_with("EAE_1")) %>%  rename_with(~gsub("_1", "", .), contains("_1")) %>% rename(drug_name=1),
+                             HERMES_INCLUDED %>% select(Tested.drug.2,starts_with("EAE_2")) %>%  rename_with(~gsub("_2", "", .), contains("_2"))%>% rename(drug_name=1),
+                             HERMES_INCLUDED %>% select(Tested.drug.3,starts_with("EAE_3")) %>%  rename_with(~gsub("_3", "", .), contains("_3"))%>% rename(drug_name=1)) %>%  rename_with(~gsub("EAE_", "", .), contains("EAE_")) %>% mutate(item="EAE"),
+                       
+                       rbind(HERMES_INCLUDED %>% select(Tested.drug.s.,starts_with("MRI_1")) %>%  rename_with(~gsub("_1", "", .), contains("_1")) %>% rename(drug_name=1),
+                             HERMES_INCLUDED %>% select(Tested.drug.2,starts_with("MRI_2")) %>%  rename_with(~gsub("_2", "", .), contains("_2"))%>% rename(drug_name=1),
+                             HERMES_INCLUDED %>% select(Tested.drug.3,starts_with("MRI_3")) %>%  rename_with(~gsub("_3", "", .), contains("_3"))%>% rename(drug_name=1),
+                             HERMES_INCLUDED %>% select(Tested.drug.s.,starts_with("MRI_4")) %>%  rename_with(~gsub("_4", "", .), contains("_4"))%>% rename(drug_name=1))%>%  rename_with(~gsub("MRI_", "", .), contains("MRI_")) %>% mutate(item="MRI")) %>% 
+      drop_na(!data_type) %>% 
+      replace_na(list(data_type="mean,SEM")) %>% 
+      mutate(var_measure=case_when(
+        grepl("SEM",data_type)~"SEM",
+        grepl("SD",data_type)~"SD",
+        TRUE~"SEM"
+      )) %>% 
+      mutate(drug_var=ifelse(var_measure=="SEM",drug_var*sqrt(drug_n),drug_var),
+             con_var=ifelse(var_measure=="SEM",con_var*sqrt(con_n),con_var)) %>%
+      mutate(
+        escalc( "SMD",
+                m1i = drug_mean,
+                n1i = drug_n,
+                sd1i = drug_var,
+                m2i = con_mean,
+                n2i = con_n,
+                sd2i = con_var,
+                data = . 
+        )) %>%
+      rename(Name=drug_name) %>%
+      merge(.,drug_info_df,by="Name") %>%
+      mutate(drug_status=ifelse(drug_status=="Marketed","1Marketed","2Failed")) %>% 
+      group_by(item,drug_status,Name) %>% 
+      mutate(rank=cur_group_id())
+    
+    ES_df_trial2<-ES_df_trial %>% 
+      arrange(rank) %>% 
+      # select(item,drug_status,Name,rank) %>% 
+      ungroup() %>% 
+      group_split(item,drug_status) %>% 
+      map_dfr(~ .x %>% add_row(drug_status = NA, .after = Inf)) %>% 
+      ungroup() %>% 
+      mutate(rank=rank*2) %>% 
+      mutate(rank = ifelse(is.na(rank), lag(rank) + 1, rank)) %>% 
+      fill(drug_status,item)%>% 
+      mutate(Name=case_when(
+        is.na(Name)&drug_status=="2Failed"~"Median ES failed drugs",
+        is.na(Name)&drug_status=="1Marketed"~"Median ES marketed drugs",
+        TRUE~Name
+      )) %>% 
+      mutate(yi=case_when(#median
+        is.na(yi)&item=="EAE"&drug_status=="2Failed"~median(ES_df_trial$yi[ES_df_trial$drug_status=="2Failed"&ES_df_trial$item=="EAE"],na.rm=T),
+        is.na(yi)&item=="EAE"&drug_status=="1Marketed"~median(ES_df_trial$yi[ES_df_trial$drug_status=="1Marketed"&ES_df_trial$item=="EAE"],na.rm=T),
+        is.na(yi)&item=="MRI"&drug_status=="2Failed"~median(ES_df_trial$yi[ES_df_trial$drug_status=="2Failed"&ES_df_trial$item=="MRI"],na.rm=T),
+        is.na(yi)&item=="MRI"&drug_status=="1Marketed"~median(ES_df_trial$yi[ES_df_trial$drug_status=="1Marketed"&ES_df_trial$item=="MRI"],na.rm=T),
+        TRUE~yi
+      )) %>% 
+      
+      mutate(lower_CI=case_when(#lowerCI
+        item=="EAE"&drug_status=="2Failed"&Name=="Median ES failed drugs" ~quantile(ES_df_trial$yi[ES_df_trial$drug_status=="2Failed"&ES_df_trial$item=="EAE"],na.rm=T)[2],
+        item=="EAE"&drug_status=="1Marketed"&Name=="Median ES marketed drugs" ~quantile(ES_df_trial$yi[ES_df_trial$drug_status=="1Marketed"&ES_df_trial$item=="EAE"],na.rm=T)[2],
+        item=="MRI"&drug_status=="2Failed"&Name=="Median ES failed drugs" ~quantile(ES_df_trial$yi[ES_df_trial$drug_status=="2Failed"&ES_df_trial$item=="MRI"],na.rm=T)[2],
+        item=="MRI"&drug_status=="1Marketed"&Name=="Median ES marketed drugs" ~quantile(ES_df_trial$yi[ES_df_trial$drug_status=="1Marketed"&ES_df_trial$item=="MRI"],na.rm=T)[2],
+        TRUE~NA
+      )) %>% 
+      
+      mutate(upper_CI=case_when(#upperCI
+        item=="EAE"&drug_status=="2Failed"&Name=="Median ES failed drugs" ~quantile(ES_df_trial$yi[ES_df_trial$drug_status=="2Failed"&ES_df_trial$item=="EAE"],na.rm=T)[4],
+        item=="EAE"&drug_status=="1Marketed"&Name=="Median ES marketed drugs" ~quantile(ES_df_trial$yi[ES_df_trial$drug_status=="1Marketed"&ES_df_trial$item=="EAE"],na.rm=T)[4],
+        item=="MRI"&drug_status=="2Failed"&Name=="Median ES failed drugs" ~quantile(ES_df_trial$yi[ES_df_trial$drug_status=="2Failed"&ES_df_trial$item=="MRI"],na.rm=T)[4],
+        item=="MRI"&drug_status=="1Marketed"&Name=="Median ES marketed drugs" ~quantile(ES_df_trial$yi[ES_df_trial$drug_status=="1Marketed"&ES_df_trial$item=="MRI"],na.rm=T)[4],
+        TRUE~NA
+      )) %>% 
+      mutate(color=ifelse(is.na(drug_mean),"overall",drug_status)) %>% 
+      ungroup() %>% 
+      group_by(as.factor(rank)) %>% 
+      mutate(rank2=cur_group_id()) %>%
+      mutate(Name=case_when(
+        Name=="Interferon Beta 1"~"Interferon beta-1",
+        Name=="Median ES marketed drugs"~"Median ES approved drugs",
+        TRUE~Name)) %>% 
+      mutate(color=case_when(
+        color=="1Marketed"~"Approved",
+        color=="2Failed"~"Failed",
+        TRUE~color))
+    
+    MRI_EAE_ES_plot<-ES_df_trial2 %>% 
+      ggplot(aes(y = rank2, x = yi))+
+      geom_segment(aes(y=rank2,yend=rank2,x=3.5,xend=-30),color="#f1f1f1",linewidth=0.4)+
+      geom_vline(xintercept = 0,linetype="dashed",color="gray20",linewidth=0.5) +
+      geom_point(aes(fill=color,color=color,shape=color,alpha=color,size=color))+
+      geom_segment(aes(y=rank2,yend=rank2,x=upper_CI,xend=lower_CI),color="#222222")+
+      geom_label(data = . %>% filter(grepl("Median",Name)),aes(label=Name,x=4),label.size = NA,hjust=0,fontface="bold")+
+      geom_label(data = . %>% filter(!(grepl("Median",Name))),aes(label=Name,x=4),label.size = NA,hjust=0)+
+      labs(x = "Tested Drugs", y = "Effect Size") +
+      theme_minimal()+
+      theme(
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(face="bold",vjust=-1.5,size=12),
+        axis.text.x = element_text(size=14),
+        axis.text.y = element_blank(),
+        panel.grid.major.y =element_blank(),
+        panel.grid.minor.y =element_blank(),
+        strip.background = element_rect(fill="#e8eae7",color="#cbccca"),
+        panel.grid.minor.x =element_blank(),
+        legend.title = element_blank(),
+        strip.text = element_text(size=14),
+        legend.text = element_text(size=12),
+        legend.position = "bottom")+
+      scale_color_manual(values=c("Approved"="#567ca7", "Failed"="#d0645e","overall"="#222222"),breaks=c("Approved","Failed"))+
+      scale_fill_manual(values=c("Approved"="#6896ca", "Failed"="#ff7b74","overall"="#222222"),breaks=c("Approved","Failed"))+
+      scale_alpha_manual(values=c("Approved"=0.75, "Failed"=0.75,"overall"=1),breaks=c("Approved","Failed"))+
+      scale_shape_manual(values=c("Approved"=21, "Failed"=21,"overall"=23),breaks=c("Approved","Failed"))+
+      scale_size_manual(values=c("Approved"=4, "Failed"=4,"overall"=2),breaks=c("Approved","Failed"))+
+      scale_y_reverse()+
+      scale_x_continuous(breaks=c(0,-10,-20))+
+      facet_wrap(.~item,ncol=1,scales = "free_y",strip.position="left")+
+      force_panelsizes(rows = c(1,0.30))+
+      coord_cartesian(xlim=c(NA,20))+
+      labs(x="Standardised Mean Difference")
+    
+    MRI_EAE_ES_plot
+    
+    
+  })
+  
 }
 
 # Run the application 

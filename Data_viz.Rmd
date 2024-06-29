@@ -398,6 +398,9 @@ MRI_EAE_ES_plot
 ggsave("Figure4_ES_final_updated.png",MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
 ggsave("Figure4_ES_final_updated.pdf",MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
 ggsave("Figure4_ES_final_updated.tiff",dpi=300,MRI_EAE_ES_plot,height = 29/3,width = 21/3,bg = "white")
+
+ES_df_trial2 %>% filter(color=="overall") %>% ungroup() %>% 
+  select(item,drug_status,yi,lower_CI,upper_CI)
 ```
 
 #Rationale of studies - pia's extraction
