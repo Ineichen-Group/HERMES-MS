@@ -116,7 +116,7 @@ HERMES_INCLUDED %>%
   mutate(item="B. Animal model") %>% 
   rename(Category=Animal.model,n=Frequency))
 
-labels_row1<-list("A. Species"=bquote(bold("A.")~"Species"),"B. Animal model"=bquote(bold("B.")~"Animal model"))
+labels_row1<-list("A. Species"=bquote(bold("a.")~"Species"),"B. Animal model"=bquote(bold("b.")~"Animal model"))
 labeller_row1 <- function(variable,value){
   return(labels_row1[value])}
 
@@ -161,7 +161,7 @@ HERMES_INCLUDED %>%
   mutate(item="D. Strain") %>% 
   rename(Category=Strain,n=Frequency))
 
-labels_row2<-list("C. Sex"=bquote(bold("C.")~"Sex"),"D. Strain"=bquote(bold("D.")~"Strain"))
+labels_row2<-list("C. Sex"=bquote(bold("c.")~"Sex"),"D. Strain"=bquote(bold("d.")~"Strain"))
 labeller_row2 <- function(variable,value){
   return(labels_row2[value])}
 
@@ -204,7 +204,7 @@ ggplot(aes(x = reorder(drugs, -n), y = n,fill=status,color=status)) +
 
 
 figure_panel3<-grid.arrange(plot_row1,plot_row2,
-                            p3+ggtitle(bquote(bold("E.")~"Tested drugs"))+
+                            p3+ggtitle(bquote(bold("e.")~"Tested drugs"))+
                               theme(legend.position = "bottom",
                                     legend.text = element_text(size=13,color="gray20")),
                             ncol=1,heights=c(1,1,1.5))
